@@ -11,3 +11,200 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum CategoryType {
+  income
+  expense
+}
+
+enum FinancialGoalStatus {
+  active
+  completed
+  cancelled
+}
+
+enum BillingCycle {
+  monthly
+  yearly
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+}
+
+enum ReminderType {
+  bill
+  goal
+  budget
+  general
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar
+  email        String   @unique @db.VarChar
+  passwordHash String   @map("password_hash") @db.VarChar
+  avatarUrl    String?  @map("avatar_url") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  financialAccounts FinancialAccount[]
+  categories        Category[]
+  transactions      Transaction[]
+  budgets           Budget[]
+  financialGoals    FinancialGoal[]
+  subscriptions     Subscription[]
+  reminders         Reminder[]
+  purchaseChecks    PurchaseCheck[]
+
+  @@map("users")
+}
+
+model FinancialAccount {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  name           String   @db.VarChar
+  initialBalance Decimal  @map("initial_balance") @db.Decimal(15, 0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+
+  @@map("financial_accounts")
+}
+
+model Category {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String?      @map("user_id") @db.Uuid
+  name      String       @db.VarChar
+  type      CategoryType
+  icon      String       @db.VarChar
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user          User?          @relation(fields: [userId], references: [id])
+  transactions  Transaction[]
+  budgetItems   BudgetItem[]
+  subscriptions Subscription[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  accountId       String       @map("account_id") @db.Uuid
+  categoryId      String?      @map("category_id") @db.Uuid
+  type            CategoryType
+  amount          Decimal      @db.Decimal(15, 0)
+  description     String?      @db.VarChar
+  transactionDate DateTime     @map("transaction_date") @db.Date
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user     User             @relation(fields: [userId], references: [id])
+  account  FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category?        @relation(fields: [categoryId], references: [id])
+
+  @@map("transactions")
+}
+
+model Budget {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  month       Int
+  year        Int
+  totalAmount Decimal  @map("total_amount") @db.Decimal(15, 0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user  User         @relation(fields: [userId], references: [id])
+  items BudgetItem[]
+
+  @@unique([userId, month, year])
+  @@map("budgets")
+}
+
+model BudgetItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  budgetId    String   @map("budget_id") @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  limitAmount Decimal  @map("limit_amount") @db.Decimal(15, 0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  budget   Budget   @relation(fields: [budgetId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@map("budget_items")
+}
+
+model FinancialGoal {
+  id           String              @id @default(uuid()) @db.Uuid
+  userId       String              @map("user_id") @db.Uuid
+  name         String              @db.VarChar
+  targetAmount Decimal             @map("target_amount") @db.Decimal(15, 0)
+  savedAmount  Decimal             @default(0) @map("saved_amount") @db.Decimal(15, 0)
+  deadline     DateTime            @db.Date
+  description  String?             @db.Text
+  status       FinancialGoalStatus @default(active)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("financial_goals")
+}
+
+model Subscription {
+  id              String             @id @default(uuid()) @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  name            String             @db.VarChar
+  amount          Decimal            @db.Decimal(15, 0)
+  billingCycle    BillingCycle       @map("billing_cycle")
+  nextPaymentDate DateTime           @map("next_payment_date") @db.Date
+  categoryId      String             @map("category_id") @db.Uuid
+  status          SubscriptionStatus @default(active)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user     User     @relation(fields: [userId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model Reminder {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  title        String       @db.VarChar
+  description  String?      @db.VarChar
+  reminderDate DateTime     @map("reminder_date") @db.Timestamp(6)
+  type         ReminderType
+  isCompleted  Boolean      @default(false) @map("is_completed")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("reminders")
+}
+
+model PurchaseCheck {
+  id                      String   @id @default(uuid()) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  itemName                String   @map("item_name") @db.VarChar
+  price                   Decimal  @db.Decimal(15, 0)
+  balanceBefore           Decimal  @map("balance_before") @db.Decimal(15, 0)
+  balanceAfter            Decimal  @map("balance_after") @db.Decimal(15, 0)
+  safeToSpendBefore       Decimal  @map("safe_to_spend_before") @db.Decimal(15, 0)
+  safeToSpendAfter        Decimal  @map("safe_to_spend_after") @db.Decimal(15, 0)
+  shoppingBudgetRemaining Decimal  @map("shopping_budget_remaining") @db.Decimal(15, 0)
+  goalImpact              String   @map("goal_impact") @db.Text
+  aiAnalysis              String   @map("ai_analysis") @db.Text
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("purchase_checks")
+}
